@@ -1,0 +1,66 @@
+-- | Trabalha os canhoes
+trabalhaCanhoes :: Estado -> Int -> Estado
+trabalhaCanhoes estado 0 = estado
+trabalhaCanhoes estado n = if eDisparoCanhao disparo  then  (if estado == newEstado then trabalhaCanhoes updateOldEstado (n-1)  else trabalhaCanhoes updateNewEstado (n-1))  else trabalhaCanhoes estado (n-1)
+                where newEstado = atingiu estado disparo
+                      updateNewEstado = newEstado {disparosEstado = eliminaDisparo (disparosEstado newEstado) (n-1)}
+                      updateOldEstado = estado {disparosEstado = if encontraPosicaoMatriz (posicaoDisparo disparo) (mapaEstado estado) == Vazia then atualizaIndiceLista (n-1) newDisparo (disparosEstado estado) else eliminaDisparo (disparosEstado estado) (n-1)}
+                      disparo = encontraIndiceLista (n-1) (disparosEstado estado)
+                      newDisparo = disparo{posicaoDisparo = somaVetores (posicaoDisparo disparo) (direcaoParaVetor (direcaoDisparo disparo))}
+
+
+
+-- | Elimina o disparo no indice n
+eliminaDisparo :: [Disparo] -> Int -> [Disparo]
+eliminaDisparo [] _ = []
+eliminaDisparo (_:t) 0 = t
+eliminaDisparo (h:t) n = h:eliminaDisparo t (n-1)
+
+-- | Ve se atingiu pela "mudança" do estado
+atingiu :: Estado -> Disparo -> Estado
+atingiu estado disp = destroiParede (peca pos) pos $ destroiParede (peca pos1) pos1  $ destroiJogadores (posTank (jogadoresEstado estado)) (disp,pos1,0) $ destroiCanhoes (pos,pos1,dir) disp estado 
+                                where pos1 = getPos1Dir dir pos
+                                      pos = posicaoDisparo disp
+                                      dir = direcaoDisparo disp
+                                      peca q = encontraPosicaoMatriz q (mapaEstado estado) 
+
+estadoSemDisparo :: Disparo -> Estado -> Estado
+estadoSemDisparo d e = e{disparosEstado = retiraCanhao d (disparosEstado e)}
+
+retiraCanhao :: Disparo -> [Disparo] -> [Disparo]
+retiraCanhao _ [] = []
+retiraCanhao d  (h:t) = if h == d then t else h:retiraCanhao d  t
+
+-- | Obtem a "2" posicao do Disparo baseado na direçao
+getPos1Dir :: Direcao -> Posicao -> Posicao
+getPos1Dir C (x,y) = (x,y+1)
+getPos1Dir B (x,y) = (x,y+1)
+getPos1Dir D (x,y) = (x+1,y)
+getPos1Dir E (x,y) = (x+1,y)                                     
+
+-- | Destroi canhoes que se intercetem
+destroiCanhoes :: (Posicao,Posicao,Direcao) -> Disparo -> Estado -> Estado
+destroiCanhoes info disp estado = if not (isJust disparoElim) then estado else estadoSemDisparo (fromJust disparoElim )  estado
+                        where disparoElim = eliminaDisparosCruzados info (disparosEstado (estadoSemDisparo disp estado))
+                        
+
+
+eliminaDisparosCruzados :: (Posicao,Posicao,Direcao) -> [Disparo] -> Maybe Disparo
+eliminaDisparosCruzados _ [] = Nothing
+eliminaDisparosCruzados (p1,p2,dir)  (h@DisparoCanhao{jogadorDisparo = _ , posicaoDisparo = pD , direcaoDisparo = _}:t) = if acertou then Just h else eliminaDisparosCruzados (p1,p2,dir) t       
+                                                                                                                        where acertou = p1 == (subtraiVetores pD (direcaoParaVetor dir)) || p2 == (subtraiVetores pD (direcaoParaVetor dir)) || pD == p1 || pD == p2
+eliminaDisparosCruzados a  (h:t) = eliminaDisparosCruzados a  t
+
+-- | Funcao que verifica se algum jogador é acertado pelo disparo
+destroiJogadores :: [Posicao] -> (Disparo,Posicao,Int) -> Estado -> Estado
+destroiJogadores [] _ estado = estado
+destroiJogadores (h:t) (disp,p2,n) estado =  if ( (indJog /= (jogadorDisparo disp)) && (h == p1 || h == p2)) then  acertouJogador n  $ destroiJogadores resto (disp,p2,n+1) estado  else destroiJogadores t (disp,p2,n+1) estado
+                                        where resto = drop (div n 4 *4 +4) t
+                                              indJog = div n 4
+                                              p1 = posicaoDisparo disp
+
+-- | Funcao que é executada quando algum jogador é acertado , atualiza o jogador
+acertouJogador :: Int -> Estado -> Estado
+acertouJogador n estado = estado{jogadoresEstado = atualizaIndiceLista indJog (jogador{vidasJogador =decreaseVidasJogador (vidasJogador jogador)}) (jogadoresEstado estado) }
+                        where jogador = encontraIndiceLista indJog (jogadoresEstado estado)
+                              indJog = div n 4
